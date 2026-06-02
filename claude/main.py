@@ -35,17 +35,14 @@ def run_web_mode(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Port Container Truck Dispatch System")
-    parser.add_argument("--mode", choices=["matplotlib", "web"], default="matplotlib",
-                        help="Run mode: matplotlib window or web server")
+    parser.add_argument("--mode", choices=["matplotlib", "web"], default="matplotlib",help="Run mode: matplotlib window or web server")
     parser.add_argument("--trucks", type=int, default=4, help="Number of trucks")
     parser.add_argument("--cols", type=int, default=8, help="Port grid columns")
     parser.add_argument("--rows", type=int, default=3, help="Port grid rows")
     parser.add_argument("--no-ml", action="store_true", help="Disable ML task value prediction")
-    parser.add_argument("--no-congestion", action="store_true",
-                        help="Disable congestion prediction")
+    parser.add_argument("--no-congestion", action="store_true",help="Disable congestion prediction")
     parser.add_argument("--host", default="127.0.0.1", help="Web server host")
     parser.add_argument("--port", type=int, default=5000, help="Web server port")
-
     args = parser.parse_args()
 
     if args.mode == "web":

@@ -5,12 +5,8 @@ import math
 
 
 class AdvancedRealisticPort:
-    """现实风格港口布局生成器。
-
-    支持可配置的网格规模，分离数据生成与渲染逻辑，
-    适用于从 8x3 到 20x10 的大规模港口场景。
-    """
-
+    """现实风格港口布局生成器。从 8x3 到 20x10 的港口场景。"""
+    
     def __init__(self, seed=None):
         if seed is not None:
             random.seed(seed)
@@ -26,21 +22,13 @@ class AdvancedRealisticPort:
         self.base_y = 10
 
     def generate(self, num_cols=8, num_rows=3, yard_prob=0.7, quay_prob=0.6):
-        """生成港口布局。
-
-        Args:
-            num_cols: 列数 (8~20)
-            num_rows: 行数 (3~10)
-            yard_prob: 堆场块生成概率
-            quay_prob: 泊位生成概率
-        """
         self.nodes = {}
         self.graph = {}
         self.yards = []
         self.zones = []
         self.node_registry = set()
 
-        # 动态间距（大规模时压缩间距）
+        # 动态间距
         if num_cols > 12:
             self.col_spacing = 14
             self.row_spacing = 10
@@ -60,11 +48,8 @@ class AdvancedRealisticPort:
         for c in range(1, num_cols + 1):
             x_left = c * self.col_spacing - 5
             x_right = c * self.col_spacing + 5
-
-            # 泊位
             q_node = f'Q{c}'
             self._add_node(q_node, ((x_left + x_right) / 2, 2))
-
             if random.random() < quay_prob:
                 self.zones.append({
                     'pos': (x_left - 2, 0.5),
@@ -73,7 +58,6 @@ class AdvancedRealisticPort:
                     'color': '#708090',
                     'label': f'Quay {c}'
                 })
-
             # 列主干道
             n_in = f'C{c}_L0'
             n_out = f'C{c}_R0'
@@ -82,7 +66,6 @@ class AdvancedRealisticPort:
             self._add_edge(n_in, n_out, bidirectional=True)
             self._add_edge(n_in, q_node, bidirectional=True)
             self._add_edge(q_node, n_out, bidirectional=True)
-
             column_path_left = [n_in]
             column_path_right = [n_out]
 

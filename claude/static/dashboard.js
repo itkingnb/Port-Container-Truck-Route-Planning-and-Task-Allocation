@@ -2,7 +2,15 @@
 
 const canvas = document.getElementById('port-canvas');
 const ctx = canvas.getContext('2d');
-
+const STATUS_CN = {
+    IDLE: '空闲',
+    PICKING: '前往取箱',
+    LOADING: '装箱中',
+    MOVING: '运输中',
+    UNLOADING: '卸箱中',
+    DELIVERING: '配送中',
+    BUSY: '执行任务'
+};
 // Viewport
 let viewX = -30, viewY = -10;
 let scale = 1.8;
@@ -153,7 +161,7 @@ function drawPort() {
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 10px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(`T${truck.id}`, tx, ty - 10);
+            ctx.fillText(`车${truck.id}`, tx, ty - 10);
             // Status indicator
             if (truck.status === 'IDLE') {
                 ctx.fillStyle = '#2ecc71';
@@ -237,13 +245,13 @@ function updateSidebar() {
         taskList.innerHTML = simState.tasks.slice(0, 10).map(t => {
             const cls = t.urgency > 0.7 ? 'task-item task-urgent' : 'task-item';
             return `<div class="${cls}">
-                <span>${t.id} ${t.type}</span>
-                <span style="color:#f0c040;">U:${t.urgency.toFixed(1)}</span>
+                <span>任务${t.id} ${t.type}</span>
+                <span style="color:#f0c040;">紧急度:${t.urgency.toFixed(1)}</span>
                 <span>${t.start}→${t.end}</span>
             </div>`;
         }).join('');
     } else {
-        taskList.innerHTML = '<span style="color:#888;">No pending tasks</span>';
+        taskList.innerHTML = '<span style="color:#888;">暂无待调度任务</span>';
     }
 
     // Truck list
@@ -252,9 +260,10 @@ function updateSidebar() {
         truckList.innerHTML = simState.trucks.map(t => `
             <div class="truck-item">
                 <span class="truck-dot" style="background:${t.color}"></span>
-                T${t.id} | ${t.status} |
-                Util: ${Math.round(t.utilization * 100)}% |
-                Trips: ${t.trip_count || 0}
+                车辆${t.id}
+                | ${STATUS_CN[t.status] || t.status}
+                | 利用率:${Math.round(t.utilization * 100)}%
+                | 完成运输:${t.trip_count || 0}次
             </div>
         `).join('');
     }
@@ -292,7 +301,7 @@ async function stopAuto() {
 
 function updateAutoButton() {
     const btn = document.getElementById('btn-auto');
-    btn.textContent = autoRunning ? '⏸ Pause' : '▶ Start';
+    btn.textContent = autoRunning ? '暂停' : '开始';
     btn.className = autoRunning ? 'btn-stop' : 'btn-start';
 }
 
@@ -310,7 +319,7 @@ async function addTask() {
 async function toggleML() {
     const btn = document.getElementById('btn-ml');
     mlEnabled = !mlEnabled;
-    btn.textContent = 'ML: ' + (mlEnabled ? 'ON' : 'OFF');
+    btn.textContent = '机器学习: ' + (mlEnabled ? '开' : '关');
     btn.style.background = mlEnabled ? '#2ecc71' : '#7f8c8d';
     await fetch('/api/config', {
         method: 'POST',
@@ -322,7 +331,7 @@ async function toggleML() {
 async function toggleCongestion() {
     const btn = document.getElementById('btn-congestion');
     congestionEnabled = !congestionEnabled;
-    btn.textContent = 'Congestion: ' + (congestionEnabled ? 'ON' : 'OFF');
+    btn.textContent = '拥堵趋势预测: ' + (congestionEnabled ? '开' : '关');
     btn.style.background = congestionEnabled ? '#2ecc71' : '#7f8c8d';
     await fetch('/api/config', {
         method: 'POST',
