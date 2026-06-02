@@ -316,6 +316,104 @@ async function addTask() {
     await fetchState();
 }
 
+let benchAbort = false;
+let benchRunning = false;
+
+function stopBenchmark() {
+    benchAbort = true;
+}
+
+async function runBenchmark() {
+    if (benchRunning) {
+        benchAbort = true;
+        return;
+    }
+
+    const btn = document.getElementById('btn-bench');
+    const resultDiv = document.getElementById('bench-result');
+    const speed = parseFloat(document.getElementById('speed-slider').value);
+
+    benchRunning = true;
+    benchAbort = false;
+    btn.textContent = '停止测试';
+    btn.className = 'btn-stop';
+    resultDiv.style.display = 'block';
+
+    // 记录起始状态
+    await fetchState();
+    const startStep = simState.step;
+    const startCompleted = simState.stats.completed;
+    const t0 = performance.now();
+
+    const TOTAL = 1000;
+    let current = 0;
+
+    resultDiv.innerHTML = '<span style="color:#f39c12;">⏳ 性能测试运行中... 0/' + TOTAL + ' 步</span>';
+
+    // 逐步运行，按速度滑块延迟
+    for (let i = 0; i < TOTAL; i++) {
+        if (benchAbort) {
+            resultDiv.innerHTML = '<span style="color:#f39c12;">⚠ 测试已取消 (已完成 ' + current + ' 步)</span>';
+            break;
+        }
+
+        await fetch('/api/step', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ steps: 1 })
+        });
+
+        current++;
+
+        // 每步更新一次画面
+        await fetchState();
+
+        // 更新进度显示
+        if (current % 50 === 0 || current === TOTAL) {
+            resultDiv.innerHTML = '<span style="color:#f39c12;">⏳ 性能测试运行中... '
+                + current + '/' + TOTAL + ' 步</span>';
+        }
+
+        // 按速度滑块延迟
+        await new Promise(r => setTimeout(r, speed * 1000));
+    }
+
+    const elapsed = (performance.now() - t0) / 1000;
+
+    if (!benchAbort) {
+        // 获取最终状态计算差值
+        await fetchState();
+        const tasksDone = (simState.stats.completed || 0) - startCompleted;
+
+        resultDiv.innerHTML = `
+            <div style="color:#2ecc71;font-weight:bold;margin-bottom:6px;">
+                ✅ 性能测试完成 (耗时: ${elapsed.toFixed(1)}s)
+            </div>
+            <div>━━━━━━━━━━━━━━━━━━━━</div>
+            <div>测试步数: <b style="color:#f0c040;">${TOTAL}</b></div>
+            <div>任务完成: <b style="color:#f0c040;">${tasksDone}</b>
+                (总计: ${simState.stats.completed})</div>
+            <div>待处理: <b style="color:#f0c040;">${simState.stats.pending}</b></div>
+            <div>平均等待: <b style="color:#f0c040;">${simState.stats.avg_wait_time}s</b></div>
+            <div>车辆利用率: <b style="color:#f0c040;">${Math.round(simState.utilization*100)}%</b></div>
+            <div>拥堵热点: <b style="color:#f0c040;">${simState.hotspots ? simState.hotspots.length : 0}</b></div>
+            <div>模式: ${simState.mode} | 拥堵预测: ${congestionEnabled ? '开' : '关'}</div>
+            <div>━━━━━━━━━━━━━━━━━━━━</div>
+            <div style="margin-top:4px;">车辆详情:</div>
+            ${(simState.trucks || []).map(t => `
+                <div style="margin-left:8px;">
+                卡车${t.id}: ${t.status} | 利用率${Math.round(t.utilization*100)}% | 行程${t.trip_count || 0}
+                </div>
+            `).join('')}
+        `;
+    }
+
+    benchRunning = false;
+    benchAbort = false;
+    btn.textContent = '性能测试';
+    btn.className = 'btn-bench';
+}
+
 async function toggleML() {
     const btn = document.getElementById('btn-ml');
     mlEnabled = !mlEnabled;

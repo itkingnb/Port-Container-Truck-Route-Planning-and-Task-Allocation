@@ -82,15 +82,20 @@ class PortSimApp:
         self.fig, self.ax = plt.subplots(figsize=(14, 9))
         plt.subplots_adjust(bottom=0.18)
 
-        ax_btn1 = plt.axes([0.25, 0.04, 0.18, 0.05])
-        self.btn_add = Button(ax_btn1, 'Add Task',
+        ax_btn1 = plt.axes([0.15, 0.04, 0.14, 0.05])
+        self.btn_add = Button(ax_btn1, '添加任务',
                               color='lightgray', hovercolor='skyblue')
         self.btn_add.on_clicked(self._on_add_task)
 
-        ax_btn2 = plt.axes([0.48, 0.04, 0.18, 0.05])
-        self.btn_toggle = Button(ax_btn2, 'Toggle ML/Ignore',
+        ax_btn2 = plt.axes([0.32, 0.04, 0.14, 0.05])
+        self.btn_toggle = Button(ax_btn2, 'ML开关',
                                  color='lightgray', hovercolor='skyblue')
         self.btn_toggle.on_clicked(self._on_toggle_mode)
+
+        ax_btn3 = plt.axes([0.49, 0.04, 0.14, 0.05])
+        self.btn_bench = Button(ax_btn3, '性能测试',
+                                color='#e74c3c', hovercolor='#c0392b')
+        self.btn_bench.on_clicked(self._on_benchmark)
 
     def _on_add_task(self, event):
         if len(self.manager.get_pending_tasks()) >= self.max_tasks:
@@ -102,8 +107,95 @@ class PortSimApp:
 
     def _on_toggle_mode(self, event):
         self.use_ml_predictor = not self.use_ml_predictor
-        mode = "ML" if self.use_ml_predictor else "Distance-only"
-        print(f"Switched to: {mode} mode")
+        mode = "ML增强" if self.use_ml_predictor else "纯距离"
+        print(f"切换模式: {mode}")
+
+    def _on_benchmark(self, event):
+        """Matplotlib模式：逐步运行1000步，实时显示画面。"""
+        print("\n" + "=" * 60)
+        print("          性能测试 — 运行1000步仿真")
+        print("=" * 60)
+
+        if self.headless:
+            self.run_benchmark(steps=1000)
+            return
+
+        completed_before = self.total_completed
+        t0 = time.time()
+
+        for i in range(1000):
+            self.update_logic()
+            # 实时刷新画面
+            self._render_frame()
+            plt.pause(0.005)
+
+        elapsed = time.time() - t0
+
+        stats = self.manager.get_stats()
+        utilization = np.mean([t.get_utilization() for t in self.trucks])
+        hotspots = self.congestion_predictor.get_hotspot_list() if self.congestion_predictor else []
+        tasks_done = self.total_completed - completed_before
+        mode = "ML增强" if self.use_ml_predictor else "纯距离"
+        congestion = "开" if self.use_congestion_prediction else "关"
+
+        print(f"  测试步数:       1000")
+        print(f"  真实耗时:       {elapsed:.1f}秒")
+        print(f"  任务完成数:     {tasks_done} (总计: {stats['completed']})")
+        print(f"  待处理任务:     {stats['pending']}")
+        print(f"  平均等待时间:   {stats['avg_wait_time']}秒")
+        print(f"  车辆利用率:     {utilization:.1%}")
+        print(f"  拥堵热点数:     {len(hotspots)}")
+        print(f"  调度模式:       {mode} | 拥堵预测: {congestion}")
+        print(f"  车辆详情:")
+        for t in self.trucks:
+            print(f"    卡车{t.id}: 状态={t.status}  利用率={t.get_utilization():.1%}  "
+                  f"行程数={t.trip_count}")
+        print("=" * 60 + "\n")
+
+    def run_benchmark(self, steps=200):
+        """运行性能测试，输出格式化结果。"""
+        start_step = self.step_count
+        completed_before = self.total_completed
+
+        t0 = time.time()
+        for _ in range(steps):
+            self.step_once()
+        elapsed = time.time() - t0
+
+        stats = self.manager.get_stats()
+        utilization = np.mean([t.get_utilization() for t in self.trucks])
+        hotspots = self.congestion_predictor.get_hotspot_list() if self.congestion_predictor else []
+
+        tasks_done = self.total_completed - completed_before
+        mode = "ML增强" if self.use_ml_predictor else "纯距离"
+        congestion = "开" if self.use_congestion_prediction else "关"
+
+        print(f"  当前步数:       {self.step_count}")
+        print(f"  测试步数:       {steps}")
+        print(f"  耗时:           {elapsed:.3f}秒 ({steps/elapsed:.0f} 步/秒)")
+        print(f"  任务完成数:     {tasks_done} (总计: {stats['completed']})")
+        print(f"  待处理任务:     {stats['pending']}")
+        print(f"  平均等待时间:   {stats['avg_wait_time']}秒")
+        print(f"  车辆利用率:     {utilization:.1%}")
+        print(f"  拥堵热点数:     {len(hotspots)}")
+        print(f"  调度模式:       {mode} | 拥堵预测: {congestion}")
+        print(f"  车辆详情:")
+        for t in self.trucks:
+            print(f"    卡车{t.id}: 状态={t.status}  利用率={t.get_utilization():.1%}  "
+                  f"行程数={t.trip_count}")
+        print("=" * 60 + "\n")
+        return {
+            "steps": steps, "elapsed": round(elapsed, 3),
+            "steps_per_sec": round(steps / elapsed),
+            "tasks_done": tasks_done,
+            "total_completed": stats["completed"],
+            "pending": stats["pending"],
+            "avg_wait": stats["avg_wait_time"],
+            "utilization": round(utilization, 3),
+            "hotspots": len(hotspots),
+            "mode": mode, "congestion": congestion,
+            "trucks": [t.to_dict() for t in self.trucks]
+        }
 
     # -----------------------------
     # Helpers

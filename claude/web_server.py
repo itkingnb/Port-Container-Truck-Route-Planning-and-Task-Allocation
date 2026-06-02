@@ -123,6 +123,17 @@ def api_add_task():
     return jsonify({"ok": True, "task": str(new_task)})
 
 
+@app.route("/api/benchmark", methods=["POST"])
+def api_benchmark():
+    global sim_app
+    with sim_lock:
+        if sim_app is None:
+            return jsonify({"error": "Simulation not initialized"}), 400
+        steps = request.json.get("steps", 200) if request.is_json else 200
+        result = sim_app.run_benchmark(steps=steps)
+    return jsonify(_sanitize(result))
+
+
 @app.route("/api/config", methods=["GET", "POST"])
 def api_config():
     global sim_app, auto_speed
