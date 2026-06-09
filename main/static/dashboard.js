@@ -438,6 +438,7 @@ async function toggleCongestion() {
     });
 }
 
+
 async function setSpeed(val) {
     document.getElementById('speed-label').textContent = val + 's';
     await fetch('/api/config', {

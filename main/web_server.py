@@ -25,14 +25,15 @@ auto_speed = 0.05  # seconds per step
 
 
 def create_app(num_trucks=4, port_cols=8, port_rows=3,
-               use_ml=True, use_congestion=True):
+               use_ml=True, use_congestion=True, use_rl=True):
     global sim_app
     sim_app = PortSimApp(
         num_trucks=num_trucks,
         port_cols=port_cols,
         port_rows=port_rows,
         use_ml_predictor=use_ml,
-        use_congestion_prediction=use_congestion
+        use_congestion_prediction=use_congestion,
+        use_rl=use_rl
     )
     return sim_app
 
@@ -169,14 +170,15 @@ def _sanitize(obj):
 
 def run_server(num_trucks=4, port_cols=8, port_rows=3,
                use_ml_predictor=True, use_congestion_prediction=True,
-               host="127.0.0.1", port=5000):
-    """Entry point for main.py --mode web."""
+               use_rl=True, host="127.0.0.1", port=5000):
+    """入口函数，供 main.py 调用。"""
     create_app(
         num_trucks=num_trucks,
         port_cols=port_cols,
         port_rows=port_rows,
         use_ml=use_ml_predictor,
-        use_congestion=use_congestion_prediction
+        use_congestion=use_congestion_prediction,
+        use_rl=use_rl
     )
     print(f"Port dispatch web server running at http://{host}:{port}")
     app.run(host=host, port=port, debug=False, threaded=True)

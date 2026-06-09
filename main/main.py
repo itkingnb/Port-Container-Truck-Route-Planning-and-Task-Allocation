@@ -10,6 +10,7 @@ def run_web_mode(args):
         port_rows=args.rows,
         use_ml_predictor=not args.no_ml,
         use_congestion_prediction=not args.no_congestion,
+        use_rl=not args.no_rl,
         host=args.host,
         port=args.port
     )
@@ -22,6 +23,7 @@ if __name__ == "__main__":
     parser.add_argument("--rows", type=int, default=3, help="港口网格行数")
     parser.add_argument("--no-ml", action="store_true", help="禁用ML任务价值预测")
     parser.add_argument("--no-congestion", action="store_true", help="禁用拥堵趋势预测")
+    parser.add_argument("--no-rl", action="store_true", help="禁用强化学习调度")
     parser.add_argument("--host", default="127.0.0.1", help="Web服务器地址")
     parser.add_argument("--port", type=int, default=5000, help="Web服务器端口")
 

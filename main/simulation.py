@@ -4,6 +4,7 @@ from truck import Truck
 from path_planning import a_star_search
 from congestion_predictor import CongestionPredictor
 from task_value_predictor import TaskValuePredictor
+from reinforcement_agent import MultiAgentCoordinator, RLAgent
 import numpy as np
 import random
 import math
@@ -13,7 +14,8 @@ from scipy.optimize import linear_sum_assignment
 
 class PortSimApp:
     def __init__(self, num_trucks=4, port_cols=8, port_rows=3,
-                 use_ml_predictor=True, use_congestion_prediction=True):
+                 use_ml_predictor=True, use_congestion_prediction=True,
+                 use_rl=True):
         # 港口
         self.port = AdvancedRealisticPort(seed=42)
         self.port.generate(num_cols=port_cols, num_rows=port_rows, yard_prob=0.7)
@@ -23,11 +25,16 @@ class PortSimApp:
         # 智能化模块
         self.use_ml_predictor = use_ml_predictor
         self.use_congestion_prediction = use_congestion_prediction
+        self.use_rl = use_rl
         self.task_predictor = TaskValuePredictor() if use_ml_predictor else None
         self.congestion_predictor = CongestionPredictor() if use_congestion_prediction else None
 
         if self.congestion_predictor:
             self.congestion_predictor.set_node_coords_cache(self.port.nodes)
+
+        # 强化学习协调器
+        self.rl_coordinator = MultiAgentCoordinator(num_agents=num_trucks) if use_rl else None
+        self.rl_idle_tracker = {}  # {truck_id: idle_step_count}
 
         # 卡车
         self.trucks = []
@@ -38,9 +45,7 @@ class PortSimApp:
 
         for i in range(num_trucks):
             offset = np.array([random.uniform(-2, 2), random.uniform(-2, 2)])
-            t = Truck(i + 1,
-                      np.array(start_node_pos, dtype=np.float64) + offset,
-                      colors[i % len(colors)])
+            t = Truck(i + 1,np.array(start_node_pos, dtype=np.float64) + offset,colors[i % len(colors)])
             self.trucks.append(t)
 
         # 仿真状态
@@ -137,6 +142,113 @@ class PortSimApp:
         return False
 
     # -----------------------------
+    # 强化学习调度
+    # -----------------------------
+    def _update_rl_states(self):
+        """每步更新所有卡车的 RL 状态快照。"""
+        pending = self.manager.get_pending_tasks()
+        for truck in self.trucks:
+            # 统计周围车辆数
+            nearby = 0
+            for other in self.trucks:
+                if other.id == truck.id:
+                    continue
+                d = np.linalg.norm(truck.current_pos - other.current_pos)
+                if d < 10.0:
+                    nearby += 1
+
+            # 最近待处理任务距离
+            nearest = float('inf')
+            for t in pending:
+                tpos = self.port.nodes.get(t.start, (0, 0))
+                d = math.sqrt((truck.current_pos[0] - tpos[0]) ** 2 +
+                              (truck.current_pos[1] - tpos[1]) ** 2)
+                nearest = min(nearest, d)
+
+            truck.rl_state["has_task"] = truck.current_task is not None
+            truck.rl_state["nearby_vehicles"] = nearby
+            truck.rl_state["nearest_task_dist"] = nearest
+            truck.rl_state["current_node"] = self.find_nearest_node(truck.current_pos)
+
+    def _rl_dispatch(self, truck_positions):
+        """RL 智能体为未被匈牙利分配的空闲卡车做决策。
+        匈牙利已分配了最优任务匹配，RL 负责处理"多出来的空闲车"——
+        让它们自主决定等待还是前往港口中心待命。
+        """
+        # 收集未被分配的空闲卡车
+        unassigned = [t for t in self.trucks
+                      if t.status == "IDLE" and t.current_task is None]
+
+        if not unassigned:
+            return
+
+        # 计算港口中心坐标
+        center_x = sum(p[0] for p in self.port.nodes.values()) / len(self.port.nodes)
+        center_y = sum(p[1] for p in self.port.nodes.values()) / len(self.port.nodes)
+
+        for truck in unassigned:
+            agent = self.rl_coordinator.get_agent(truck.id)
+            state_key = agent.get_state(truck, self.port.nodes, self.manager)
+            action = agent.choose_action(state_key)
+
+            truck.last_action = action
+
+            if action == 2:  # wait_idle
+                truck.status = "IDLE"  # 保持空闲
+
+            elif action == 3:  # relocate_center
+                start_node = self.find_nearest_node(truck.current_pos)
+                # 找离中心最近的节点作为目标
+                goal_node = min(self.port.nodes.keys(),
+                                key=lambda n: math.sqrt(
+                                    (self.port.nodes[n][0] - center_x) ** 2 +
+                                    (self.port.nodes[n][1] - center_y) ** 2))
+                if start_node != goal_node:
+                    path = a_star_search(
+                        self.port.graph, self.port.nodes,
+                        start_node, goal_node,
+                        truck_positions=truck_positions,
+                        congestion_predictor=self.congestion_predictor,
+                        congestion_weight=15.0,
+                        enable_trend=self.use_congestion_prediction
+                    )
+                    if path:
+                        truck.target_path = [self.port.nodes[n] for n in path[1:]]
+                        truck.status = "WAITING"  # 移动中但不算 PICKING
+
+            # 更新空闲追踪器
+            if truck.status == "IDLE":
+                self.rl_idle_tracker[truck.id] = self.rl_idle_tracker.get(truck.id, 0) + 1
+            else:
+                self.rl_idle_tracker[truck.id] = 0
+
+    def _rl_feedback(self, truck, was_completed, had_collision):
+        """任务完成或状态变化时，给 RL Agent 反馈奖励并学习。"""
+        if not self.use_rl or truck.last_action is None:
+            return
+
+        agent = self.rl_coordinator.get_agent(truck.id)
+        old_state = agent.last_state
+        old_action = agent.last_action
+
+        if old_state is None:
+            return
+
+        # 获取新状态
+        new_state = agent.get_state(truck, self.port.nodes, self.manager)
+
+        # 计算奖励
+        idle_dur = self.rl_idle_tracker.get(truck.id, 0)
+        action_result = RLAgent.ACTIONS.get(old_action, "unknown")
+        reward = self.rl_coordinator.compute_reward(
+            truck, action_result, was_completed, had_collision, idle_dur
+        )
+
+        # Q-Learning 更新
+        agent.learn(old_state, old_action, reward, new_state)
+        truck.last_reward = reward
+
+    # -----------------------------
     # 主逻辑
     # -----------------------------
     def update_logic(self):
@@ -146,6 +258,10 @@ class PortSimApp:
 
         if self.congestion_predictor:
             self.congestion_predictor.record_step(truck_positions, self.port.nodes)
+
+        # 更新 RL 状态快照
+        if self.use_rl:
+            self._update_rl_states()
 
         # 自动生成任务
         self.auto_task_timer += 1
@@ -180,19 +296,22 @@ class PortSimApp:
                     if path:
                         truck.target_path = [self.port.nodes[n] for n in path[1:]]
 
+            # RL 为未被分配的空闲卡车做决策
+            if self.use_rl:
+                self._rl_dispatch(truck_positions)
+
         # 车辆运动
         for truck in self.trucks:
             truck.record_position()
             truck.update_stats()
+            had_collision = self._check_collision_risk(truck)
 
             if truck.target_path:
                 target = np.array(truck.target_path[0], dtype=np.float64)
                 direction = target - truck.current_pos
                 dist = np.linalg.norm(direction)
 
-                is_blocked = self._check_collision_risk(truck)
-
-                if not is_blocked:
+                if not had_collision:
                     if dist < truck.speed:
                         truck.current_pos = target
                         truck.target_path.pop(0)
@@ -242,7 +361,21 @@ class PortSimApp:
                             )
                     self.manager.mark_done(truck.current_task)
                     self.total_completed += 1
+
+                    # RL 反馈：任务完成
+                    self._rl_feedback(truck, was_completed=True,
+                                      had_collision=had_collision)
                     truck.reset_task()
+
+                elif truck.status == "WAITING":
+                    # WAITING 状态：RL relocate 到达目的地后回到 IDLE
+                    truck.status = "IDLE"
+
+            # 非完成状态的 RL 反馈（每步）
+            if truck.status != "DELIVERING" or truck.target_path:
+                if had_collision and self.use_rl:
+                    self._rl_feedback(truck, was_completed=False,
+                                      had_collision=True)
 
         self._collect_metrics()
 
@@ -269,9 +402,12 @@ class PortSimApp:
     def reset(self):
         self.step_count = 0
         self.manager = TaskManager([])
+        self.rl_idle_tracker = {}
         for truck in self.trucks:
             truck.reset_task()
             truck.current_pos = np.array(self.port.nodes['Gate_In'], dtype=np.float64)
+            truck.last_action = None
+            truck.last_reward = 0.0
 
         initial_tasks = self.gen.create_random_tasks(num=5)
         for i, t in enumerate(initial_tasks):
@@ -281,6 +417,9 @@ class PortSimApp:
         if self.congestion_predictor:
             self.congestion_predictor = CongestionPredictor()
             self.congestion_predictor.set_node_coords_cache(self.port.nodes)
+
+        if self.use_rl:
+            self.rl_coordinator = MultiAgentCoordinator(num_agents=self.num_trucks)
 
     def run_benchmark(self, steps=200):
         """运行性能测试，输出格式化结果。"""
@@ -298,6 +437,7 @@ class PortSimApp:
         tasks_done = self.total_completed - completed_before
         mode = "ML增强" if self.use_ml_predictor else "纯距离"
         congestion = "开" if self.use_congestion_prediction else "关"
+        rl_info = self.rl_coordinator.get_stats() if self.rl_coordinator else {}
 
         print(f"  当前步数:       {self.step_count}")
         print(f"  测试步数:       {steps}")
@@ -307,7 +447,10 @@ class PortSimApp:
         print(f"  平均等待时间:   {stats['avg_wait_time']}秒")
         print(f"  车辆利用率:     {utilization:.1%}")
         print(f"  拥堵热点数:     {len(hotspots)}")
-        print(f"  调度模式:       {mode} | 拥堵预测: {congestion}")
+        print(f"  调度模式:       {mode} | 拥堵预测: {congestion} | RL: {'开' if self.use_rl else '关'}")
+        if rl_info:
+            print(f"  RL状态:        episodes={rl_info['total_episodes']}  "
+                  f"ε={rl_info['avg_epsilon']}  冲突={rl_info['conflicts_resolved']}")
         print(f"  车辆详情:")
         for t in self.trucks:
             print(f"    卡车{t.id}: 状态={t.status}  利用率={t.get_utilization():.1%}  "
@@ -328,6 +471,7 @@ class PortSimApp:
 
     def get_state_dict(self):
         """返回完整仿真状态（供 Web API 和外部消费）。"""
+        rl_stats = self.rl_coordinator.get_stats() if self.rl_coordinator else {}
         return {
             "step": self.step_count,
             "trucks": [t.to_dict() for t in self.trucks],
@@ -339,6 +483,8 @@ class PortSimApp:
             "port_nodes": {k: list(v) for k, v in self.port.nodes.items()},
             "port_edges": {k: list(v) for k, v in self.port.graph.items()},
             "mode": "ML" if self.use_ml_predictor else "Distance",
+            "rl_enabled": self.use_rl,
+            "rl_stats": rl_stats,
             "metrics_history": self.metrics_history[-20:]
         }
 
