@@ -24,11 +24,7 @@ class Task:
         distance_norm = distance_cost / max(max_distance, 1.0)
         waiting = time.time() - self.waiting_since
         waiting_norm = min(waiting / 120.0, 1.0)
-        self.priority_score = (
-            0.4 * self.urgency +
-            0.3 * (1.0 - distance_norm) +
-            waiting_penalty_weight * waiting_norm
-        )
+        self.priority_score = (0.4 * self.urgency + 0.3 * (1.0 - distance_norm) + waiting_penalty_weight * waiting_norm)
         self.estimated_distance = distance_cost
         return self.priority_score
 

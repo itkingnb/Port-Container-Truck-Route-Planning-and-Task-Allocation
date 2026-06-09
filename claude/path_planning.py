@@ -1,15 +1,13 @@
 import heapq
 import math
 from functools import lru_cache
-
+from congestion_predictor import *
 
 def heuristic(pos1, pos2):
     return math.sqrt((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2)
 
 
-def a_star_search(graph, node_coords, start, end, truck_positions=None,
-                  congestion_predictor=None, congestion_weight=15.0,
-                  enable_trend=True):
+def a_star_search(graph, node_coords, start, end, truck_positions=None,congestion_predictor=None,congestion_weight=15.0,enable_trend=True):
     """增强 A* 路径搜索，集成拥堵预测机制。
 
     Args:
@@ -93,8 +91,7 @@ def _cached_heuristic(p1, p2):
     return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
-def a_star_search_cached(graph, node_coords, start, end, truck_positions=None,
-                          congestion_predictor=None, congestion_weight=15.0):
+def a_star_search_cached(graph, node_coords, start, end, truck_positions=None,congestion_predictor=None, congestion_weight=15.0):               
     """带缓存的 A* 版本，适合大规模场景。"""
     return a_star_search(
         graph, node_coords, start, end,

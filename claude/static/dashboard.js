@@ -397,7 +397,7 @@ async function runBenchmark() {
             <div>平均等待: <b style="color:#f0c040;">${simState.stats.avg_wait_time}s</b></div>
             <div>车辆利用率: <b style="color:#f0c040;">${Math.round(simState.utilization*100)}%</b></div>
             <div>拥堵热点: <b style="color:#f0c040;">${simState.hotspots ? simState.hotspots.length : 0}</b></div>
-            <div>模式: ${simState.mode} | 拥堵预测: ${congestionEnabled ? '开' : '关'}</div>
+            <div>模式: ${mlEnabled?"ML":"无ML"} | 拥堵预测: ${congestionEnabled ? '开' : '关'}</div>
             <div>━━━━━━━━━━━━━━━━━━━━</div>
             <div style="margin-top:4px;">车辆详情:</div>
             ${(simState.trucks || []).map(t => `

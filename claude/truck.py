@@ -22,7 +22,6 @@ class Truck:
         }
         self.last_action = None
         self.last_reward = 0.0
-
         # History trajectory for congestion analysis
         self.trajectory = deque(maxlen=200)
         self.trip_count = 0

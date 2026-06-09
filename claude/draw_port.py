@@ -1,11 +1,9 @@
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 import random
 import math
 
 
 class AdvancedRealisticPort:
-    """现实风格港口布局生成器。从 8x3 到 20x10 的港口场景。"""
+    """港口布局生成器。从 8x3 到 20x10 的港口场景。"""
     
     def __init__(self, seed=None):
         if seed is not None:
@@ -128,67 +126,3 @@ class AdvancedRealisticPort:
             'y_max': max(ys) + 10
         }
 
-    def draw(self, ax=None):
-        """Matplotlib 渲染（用于调试和本地显示）。"""
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(16, 9))
-
-        ax.set_facecolor('#f0f0f0')
-        bounds = self.get_bounds()
-
-        # 海
-        ax.add_patch(patches.Rectangle(
-            (bounds['x_min'], -5), bounds['x_max'] - bounds['x_min'], 15,
-            color='#add8e6', zorder=0
-        ))
-
-        # 泊位区
-        for quay in self.zones:
-            ax.add_patch(patches.Rectangle(
-                quay['pos'], quay['w'], quay['h'],
-                facecolor=quay['color'], edgecolor='black',
-                alpha=0.6, lw=0.5, zorder=1
-            ))
-            ax.text(
-                quay['pos'][0] + quay['w'] / 2, quay['pos'][1] + quay['h'] / 2,
-                quay['label'], ha='center', va='center',
-                color='white', fontsize=7, fontweight='bold'
-            )
-
-        # 堆场
-        for y in self.yards:
-            ax.add_patch(patches.Rectangle(
-                y['pos'], y['w'], y['h'],
-                facecolor='tan', edgecolor='black',
-                alpha=0.8, lw=1, zorder=3
-            ))
-            ax.text(
-                y['pos'][0] + y['w'] / 2, y['pos'][1] + y['h'] / 2,
-                y['label'], ha='center', va='center',
-                fontsize=7, fontweight='bold'
-            )
-
-        # 路网
-        for u, neighbors in self.graph.items():
-            for v in neighbors:
-                p1, p2 = self.nodes[u], self.nodes[v]
-                ax.plot(
-                    [p1[0], p2[0]], [p1[1], p2[1]],
-                    color='white', lw=4, zorder=1, solid_capstyle='round'
-                )
-                ax.plot(
-                    [p1[0], p2[0]], [p1[1], p2[1]],
-                    color='black', lw=0.5, alpha=0.3, zorder=2
-                )
-
-        # 节点
-        for name, pos in self.nodes.items():
-            color = 'red' if ('L0' in name or 'R0' in name or 'Gate' in name) else 'gray'
-            size = 20 if color == 'red' else 10
-            ax.scatter(pos[0], pos[1], color=color, s=size, alpha=0.6, zorder=5)
-
-        ax.set_title("Port Layout", fontsize=14)
-        ax.set_aspect('equal')
-        ax.set_xlim(bounds['x_min'], bounds['x_max'])
-        ax.set_ylim(bounds['y_min'], bounds['y_max'])
-        return ax

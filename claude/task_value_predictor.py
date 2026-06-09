@@ -35,7 +35,7 @@ class TaskValuePredictor:
         self._init_trees()
 
     def _init_trees(self):
-        """初始化简易决策树集合（不依赖 sklearn）。"""
+        """初始化简易决策树集合。"""
         self.trees = []
         for _ in range(self.num_trees):
             tree = {
@@ -48,11 +48,7 @@ class TaskValuePredictor:
         self.is_trained = True
 
     def _extract_features(self, task, truck_pos, task_pos, context):
-        """提取任务特征向量。
-
-        Returns:
-            [urgency, distance_norm, waiting_norm, type_encoding]
-        """
+        """提取任务特征向量。"""
         urgency = task.urgency
         distance = math.sqrt(
             (truck_pos[0] - task_pos[0]) ** 2 + (truck_pos[1] - task_pos[1]) ** 2

@@ -19,8 +19,7 @@ class RLAgent:
         3: "relocate_center",   # 前往中心区域待命
     }
 
-    def __init__(self, agent_id, learning_rate=0.1, discount=0.9,
-                 epsilon=0.3, epsilon_decay=0.995, epsilon_min=0.05):
+    def __init__(self, agent_id, learning_rate=0.1, discount=0.9, epsilon=0.3, epsilon_decay=0.995, epsilon_min=0.05):
         self.id = agent_id
         self.lr = learning_rate
         self.gamma = discount
@@ -59,8 +58,7 @@ class RLAgent:
         nearest = float('inf')
         for t in pending:
             tpos = port_nodes.get(t.start, (0, 0))
-            d = math.sqrt((truck.current_pos[0] - tpos[0]) ** 2 +
-                          (truck.current_pos[1] - tpos[1]) ** 2)
+            d = math.sqrt((truck.current_pos[0] - tpos[0]) ** 2 + (truck.current_pos[1] - tpos[1]) ** 2)
             nearest = min(nearest, d)
         nearest = min(nearest, 300.0)
         dist_bin = self._discretize(nearest, 5, 0, 300)
@@ -164,9 +162,7 @@ class MultiAgentCoordinator:
                     if action == 0:  # accept_nearest
                         truck = next(t for t in trucks if t.id == truck_id)
                         best_task = min(pending,
-                                        key=lambda t: math.sqrt(
-                                            (truck.current_pos[0] - port_nodes[t.start][0]) ** 2 +
-                                            (truck.current_pos[1] - port_nodes[t.start][1]) ** 2))
+                                        key=lambda t: math.sqrt((truck.current_pos[0] - port_nodes[t.start][0]) ** 2 +(truck.current_pos[1] - port_nodes[t.start][1]) ** 2))
                     else:  # accept_highest
                         best_task = max(pending, key=lambda t: t.priority_score)
 
@@ -192,8 +188,7 @@ class MultiAgentCoordinator:
         self.step_count += 1
         return resolved
 
-    def compute_reward(self, truck, action_result, was_completed,
-                       had_collision_risk, idle_duration):
+    def compute_reward(self, truck, action_result, was_completed,had_collision_risk, idle_duration):
         """计算奖励信号。"""
         reward = 0.0
         if was_completed:

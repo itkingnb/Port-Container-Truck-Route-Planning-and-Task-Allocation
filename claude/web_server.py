@@ -32,8 +32,7 @@ def create_app(num_trucks=4, port_cols=8, port_rows=3,
         port_cols=port_cols,
         port_rows=port_rows,
         use_ml_predictor=use_ml,
-        use_congestion_prediction=use_congestion,
-        headless=True
+        use_congestion_prediction=use_congestion
     )
     return sim_app
 

@@ -1,0 +1,1 @@
+python main.py --trucks 6 --cols 10 --rows 5
