@@ -117,7 +117,7 @@ def api_add_task():
     with sim_lock:
         if sim_app is None:
             return jsonify({"error": "Simulation not initialized"}), 400
-        new_task = sim_app.gen.create_random_tasks(num=1)[0]
+        new_task = sim_app.gen.create_random_tasks(num=1, current_step=sim_app.step_count)[0]
         new_task.id = f"T{len(sim_app.manager.queue) + 1:02d}"
         sim_app.manager.queue.append(new_task)
     return jsonify({"ok": True, "task": str(new_task)})

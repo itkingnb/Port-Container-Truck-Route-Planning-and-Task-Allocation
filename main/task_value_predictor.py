@@ -56,8 +56,8 @@ class TaskValuePredictor:
         max_dist = context.get("max_distance", 200.0)
         distance_norm = min(distance / max(max_dist, 1.0), 1.0)
 
-        waiting = context.get("waiting_time", 0)
-        waiting_norm = min(waiting / 120.0, 1.0)
+        waiting_steps = context.get("waiting_steps", 0)
+        waiting_norm = min(waiting_steps / 120.0, 1.0)
 
         type_map = {"IMPORT": 0.8, "EXPORT": 0.5, "TRANSSHIPMENT": 0.65}
         type_encoding = type_map.get(task.type, 0.5)
@@ -71,7 +71,7 @@ class TaskValuePredictor:
             task: Task 对象
             truck_pos: 卡车坐标 (x, y)
             task_pos: 任务起点坐标 (x, y)
-            context: {"max_distance": float, "waiting_time": float, "queue_length": int}
+            context: {"max_distance": float, "waiting_steps": float, "queue_length": int}
 
         Returns:
             float: 任务价值评分，越高越值得优先处理
@@ -109,17 +109,17 @@ class TaskValuePredictor:
 
         return min(1.0, max(0.0, base_score))
 
-    def record_outcome(self, task, predicted_score, actual_wait_time, was_completed):
+    def record_outcome(self, task, predicted_score, actual_wait_steps, was_completed):
         """记录任务结果用于在线学习。"""
         self.training_buffer.append({
             "features": [
                 task.urgency,
                 task.estimated_distance / 200.0,
-                actual_wait_time / 120.0,
+                actual_wait_steps / 120.0,
                 {"IMPORT": 0.8, "EXPORT": 0.5, "TRANSSHIPMENT": 0.65}.get(task.type, 0.5)
             ],
             "predicted": predicted_score,
-            "actual_utility": 1.0 / max(actual_wait_time, 1.0) if was_completed else 0.0
+            "actual_utility": 1.0 / max(actual_wait_steps, 1.0) if was_completed else 0.0
         })
 
         # 每积累 50 条数据更新权重

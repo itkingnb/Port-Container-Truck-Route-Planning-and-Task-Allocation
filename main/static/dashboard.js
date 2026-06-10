@@ -235,7 +235,7 @@ function updateSidebar() {
     const s = simState.stats;
     document.getElementById('m-completed').textContent = s.completed || 0;
     document.getElementById('m-pending').textContent = s.pending || 0;
-    document.getElementById('m-wait').textContent = (s.avg_wait_time || 0) + 's';
+    document.getElementById('m-wait').textContent = (s.avg_wait_steps || 0) + '步';
     document.getElementById('m-util').textContent =
         Math.round((simState.utilization || 0) * 100) + '%';
 
@@ -394,7 +394,7 @@ async function runBenchmark() {
             <div>任务完成: <b style="color:#f0c040;">${tasksDone}</b>
                 (总计: ${simState.stats.completed})</div>
             <div>待处理: <b style="color:#f0c040;">${simState.stats.pending}</b></div>
-            <div>平均等待: <b style="color:#f0c040;">${simState.stats.avg_wait_time}s</b></div>
+            <div>平均等待步数: <b style="color:#f0c040;">${simState.stats.avg_wait_steps}步</b></div>
             <div>车辆利用率: <b style="color:#f0c040;">${Math.round(simState.utilization*100)}%</b></div>
             <div>拥堵热点: <b style="color:#f0c040;">${simState.hotspots ? simState.hotspots.length : 0}</b></div>
             <div>模式: ${mlEnabled?"ML":"无ML"} | 拥堵预测: ${congestionEnabled ? '开' : '关'}</div>

@@ -58,12 +58,12 @@ class PortSimApp:
 
         # 统计
         self.total_completed = 0
-        self.total_wait_time = 0.0
+        self.total_wait_steps = 0.0
         self.start_time = time.time()
         self.metrics_history = []
 
         # 初始任务
-        initial_tasks = self.gen.create_random_tasks(num=5)
+        initial_tasks = self.gen.create_random_tasks(num=5, current_step=self.step_count)
         for i, t in enumerate(initial_tasks):
             t.id = f"T{i + 1:02d}"
         self.manager.queue.extend(initial_tasks)
@@ -111,7 +111,7 @@ class PortSimApp:
                 if self.use_ml_predictor and self.task_predictor:
                     context = {
                         "max_distance": max_distance,
-                        "waiting_time": time.time() - task.waiting_since,
+                        "waiting_steps": max(self.step_count - task.waiting_since_step, 0),
                         "queue_length": len(pending_tasks)
                     }
                     score = self.task_predictor.predict_score(
@@ -268,7 +268,10 @@ class PortSimApp:
         if (self.auto_task_timer >= self.auto_task_interval and
                 len(self.manager.get_pending_tasks()) < self.max_tasks):
             self.auto_task_timer = 0
-            new_tasks = self.gen.create_random_tasks(num=random.randint(1, 2))
+            new_tasks = self.gen.create_random_tasks(
+                num=random.randint(1, 2),
+                current_step=self.step_count
+            )
             for t in new_tasks:
                 t.id = f"T{len(self.manager.queue) + 1:02d}"
             self.manager.queue.extend(new_tasks)
@@ -352,14 +355,14 @@ class PortSimApp:
                 elif truck.status == "DELIVERING":
                     if truck.current_task:
                         if self.use_ml_predictor and self.task_predictor:
-                            wait_time = time.time() - truck.current_task.waiting_since
+                            wait_steps = max(self.step_count - truck.current_task.waiting_since_step, 0)
                             self.task_predictor.record_outcome(
                                 truck.current_task,
                                 truck.current_task.priority_score,
-                                wait_time,
+                                wait_steps,
                                 True
                             )
-                    self.manager.mark_done(truck.current_task)
+                    self.manager.mark_done(truck.current_task, self.step_count)
                     self.total_completed += 1
 
                     # RL 反馈：任务完成
@@ -387,7 +390,7 @@ class PortSimApp:
                 "step": self.step_count,
                 "completed": stats["completed"],
                 "pending": stats["pending"],
-                "avg_wait": stats["avg_wait_time"],
+                "avg_wait_steps": stats["avg_wait_steps"],
                 "utilization": round(utilization, 3),
                 "mode": "ML" if self.use_ml_predictor else "Distance"
             })
@@ -409,7 +412,7 @@ class PortSimApp:
             truck.last_action = None
             truck.last_reward = 0.0
 
-        initial_tasks = self.gen.create_random_tasks(num=5)
+        initial_tasks = self.gen.create_random_tasks(num=5, current_step=self.step_count)
         for i, t in enumerate(initial_tasks):
             t.id = f"T{i + 1:02d}"
         self.manager.queue.extend(initial_tasks)
@@ -444,7 +447,7 @@ class PortSimApp:
         print(f"  耗时:           {elapsed:.3f}秒 ({steps/elapsed:.0f} 步/秒)")
         print(f"  任务完成数:     {tasks_done} (总计: {stats['completed']})")
         print(f"  待处理任务:     {stats['pending']}")
-        print(f"  平均等待时间:   {stats['avg_wait_time']}秒")
+        print(f"  平均等待步数:   {stats['avg_wait_steps']}步")
         print(f"  车辆利用率:     {utilization:.1%}")
         print(f"  拥堵热点数:     {len(hotspots)}")
         print(f"  调度模式:       {mode} | 拥堵预测: {congestion} | RL: {'开' if self.use_rl else '关'}")
@@ -462,7 +465,7 @@ class PortSimApp:
             "tasks_done": tasks_done,
             "total_completed": stats["completed"],
             "pending": stats["pending"],
-            "avg_wait": stats["avg_wait_time"],
+            "avg_wait_steps": stats["avg_wait_steps"],
             "utilization": round(utilization, 3),
             "hotspots": len(hotspots),
             "mode": mode, "congestion": congestion,
@@ -475,7 +478,7 @@ class PortSimApp:
         return {
             "step": self.step_count,
             "trucks": [t.to_dict() for t in self.trucks],
-            "tasks": [t.to_dict() for t in self.manager.queue if t.status != "COMPLETED"],
+            "tasks": [t.to_dict(self.step_count) for t in self.manager.queue if t.status != "COMPLETED"],
             "stats": self.manager.get_stats(),
             "utilization": round(np.mean([t.get_utilization() for t in self.trucks]), 3),
             "hotspots": self.congestion_predictor.get_hotspot_list() if self.congestion_predictor else [],
